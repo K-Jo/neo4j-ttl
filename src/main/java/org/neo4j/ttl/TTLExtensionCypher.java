@@ -17,7 +17,7 @@ import static java.lang.String.format;
  */
 
 public class TTLExtensionCypher implements Lifecycle {
-    private final static Logger logger = Logger.getLogger(TTLExtensionMonster.class.getName());
+    private final static Logger logger = Logger.getLogger(TTLExtensionCypher.class.getName());
     public static final int BATCH_SIZE = 10000;
     private ScheduledExecutorService executor;
 
