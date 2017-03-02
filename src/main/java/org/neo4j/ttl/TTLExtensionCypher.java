@@ -5,6 +5,7 @@ import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.kernel.ha.HighlyAvailableGraphDatabase;
 import org.neo4j.kernel.lifecycle.Lifecycle;
 
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -45,27 +46,30 @@ public class TTLExtensionCypher implements Lifecycle {
     @Override
     public void start() throws Throwable {
 
-        executor.submit(() -> {
-            gds.execute(format("CREATE INDEX ON :`%s`(`%s`)", label, property));
-            gds.schema().awaitIndexesOnline(schedule,TimeUnit.MILLISECONDS);
-        });
+        for (String l : label.split(","))
+        {
+            executor.submit(() -> {
+                gds.execute(format("CREATE INDEX ON :`%s`(`%s`)", l, property));
+                gds.schema().awaitIndexesOnline(schedule,TimeUnit.MILLISECONDS);
+            });
 
-        String deleteStatement = format("MATCH (n:`%s`) WHERE n.`%s` <= timestamp() WITH n LIMIT %d DETACH DELETE n RETURN count(*) as c",
-                label, property, BATCH_SIZE);
+            String deleteStatement = format("MATCH (n:`%s`) WHERE n.`%s` <= timestamp() WITH n LIMIT %d DETACH DELETE n RETURN count(*) as c",
+                    l, property, BATCH_SIZE);
 
-        deleter = () -> {
+            deleter = () -> {
 
-            if (isWritable())
-            {
-                ResourceIterator<Number> result = gds.execute(deleteStatement).columnAs("c");
-                if (result.hasNext()) {
-                    int deleted = result.next().intValue();
-                    if (deleted > 0)  logger.info("Expired "+deleted+" nodes.");
-                    if (deleted == BATCH_SIZE) executor.submit(deleter);
+                if (isWritable())
+                {
+                    ResourceIterator<Number> result = gds.execute(deleteStatement).columnAs("c");
+                    if (result.hasNext()) {
+                        int deleted = result.next().intValue();
+                        if (deleted > 0)  logger.info("Expired "+deleted+" nodes.");
+                        if (deleted == BATCH_SIZE) executor.submit(deleter);
+                    }
                 }
-            }
-        };
-        executor.scheduleAtFixedRate(deleter, schedule*5, schedule, TimeUnit.MILLISECONDS);
+            };
+            executor.scheduleAtFixedRate(deleter, schedule*5, schedule, TimeUnit.MILLISECONDS);
+        }
     }
 
     public boolean isWritable()
