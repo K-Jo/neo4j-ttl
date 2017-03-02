@@ -45,9 +45,6 @@ public class TTLExtensionCypher implements Lifecycle {
     @Override
     public void start() throws Throwable {
 
-
-
-
         executor.submit(() -> {
             gds.execute(format("CREATE INDEX ON :`%s`(`%s`)", label, property));
             gds.schema().awaitIndexesOnline(schedule,TimeUnit.MILLISECONDS);
