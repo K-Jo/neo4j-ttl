@@ -2,6 +2,7 @@ package org.neo4j.ttl;
 
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.ResourceIterator;
+import org.neo4j.kernel.ha.HighlyAvailableGraphDatabase;
 import org.neo4j.kernel.lifecycle.Lifecycle;
 
 import java.util.concurrent.Executors;
@@ -44,6 +45,9 @@ public class TTLExtensionCypher implements Lifecycle {
     @Override
     public void start() throws Throwable {
 
+
+
+
         executor.submit(() -> {
             gds.execute(format("CREATE INDEX ON :`%s`(`%s`)", label, property));
             gds.schema().awaitIndexesOnline(schedule,TimeUnit.MILLISECONDS);
@@ -53,14 +57,23 @@ public class TTLExtensionCypher implements Lifecycle {
                 label, property, BATCH_SIZE);
 
         deleter = () -> {
-            ResourceIterator<Number> result = gds.execute(deleteStatement).columnAs("c");
-            if (result.hasNext()) {
-                int deleted = result.next().intValue();
-                if (deleted > 0)  logger.info("Expired "+deleted+" nodes.");
-                if (deleted == BATCH_SIZE) executor.submit(deleter);
+
+            if (isWritable())
+            {
+                ResourceIterator<Number> result = gds.execute(deleteStatement).columnAs("c");
+                if (result.hasNext()) {
+                    int deleted = result.next().intValue();
+                    if (deleted > 0)  logger.info("Expired "+deleted+" nodes.");
+                    if (deleted == BATCH_SIZE) executor.submit(deleter);
+                }
             }
         };
         executor.scheduleAtFixedRate(deleter, schedule*5, schedule, TimeUnit.MILLISECONDS);
+    }
+
+    public boolean isWritable()
+    {
+        return ! ( gds instanceof HighlyAvailableGraphDatabase && !((HighlyAvailableGraphDatabase) gds).isMaster());
     }
 
     @Override
